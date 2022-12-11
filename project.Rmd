@@ -1,0 +1,212 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(ggplot2)
+library(tsibble)
+#install.packages("xts")
+library(xts)
+library(quantmod)
+library(dplyr)
+library(tseries)
+
+```
+
+
+
+```{r}
+# read data
+df <- read.csv('AMD.csv')
+data <-df
+data$Date <- as.Date(data$Date,"%d-%m-%Y")
+#dropping rows with missing open value
+data <- filter(data,Date >= "1983-03-21")
+# Rounding off data to three decimals
+data <- data %>% mutate_at(vars("Low","Open","High","Close","Adjusted.Close"), funs(round(.,3)))
+head(data)
+```
+
+```{r}
+data <- xts(data[, -1], order.by=as.Date(data$Date))
+head(data)
+```
+
+```{r}
+ggplot(data, aes(x = index(data), y = data$Close)) + geom_line(color = "darkblue") + ggtitle("AMD Stock") + xlab("Date") + ylab("Price") + theme(plot.title = element_text(hjust = 0.5)) + scale_x_date(date_labels = "%b %y", date_breaks = "4 years")
+```
+
+```{r}
+barChart(data, bar.type = 'hlc', TA = NULL)
+```
+```{r}
+library(forecast)
+
+data.holt <- HoltWinters(data$Close,gamma = FALSE)
+data.holt
+```
+
+```{r}
+plot(data.holt)
+```
+
+```{r}
+data.months <- endpoints(data,on="months")
+#data.months
+data.months <- data[data.months]
+head(data.months)
+```
+
+```{r}
+plot(data.months$Open)
+data.months.series <- ts(data.months,start=c(1983,03),frequency = 12)
+```
+
+```{r}
+plot(data.months.series)
+```
+
+```{r}
+data.months.series.holt <- HoltWinters(data.months.series,gamma = FALSE)
+
+data.months.series.holt
+```
+```{r}
+plot(data.months.series.holt)
+```
+
+
+```{r}
+data.months.series.ts <- as_tsibble(data.months.series)
+
+data.months.series.ts <- filter(data.months.series.ts,key=="Open")
+data.months.series.ts
+```
+
+
+```{r}
+library("forecast")
+
+```
+
+
+```{r}
+tsr <- ts(data.months[,4],frequency=12, start=c(1983,3))
+tsr.decomp <- decompose(tsr)
+plot(tsr.decomp)
+```
+```{r}
+holtt <- holt(tsr,type="additive",damped=F)
+holtt.forecast <- forecast(holtt,h=10)
+
+plot(holtt.forecast)
+```
+
+
+```{r}
+ETS <- ets(tsr)
+ETS.forecast <- forecast(ETS,h=10)
+plot(ETS.forecast)
+```
+
+
+```{r}
+tsdf <- diff(tsr, lag = 2)
+tsdf <- tsdf[!is.na(tsdf)]
+adf.test(tsdf)
+plot(tsdf)
+```
+```{r}
+tsdf %>% ggtsdisplay(main="")
+```
+
+
+```{r}
+acf(tsdf)
+```
+
+
+```{r}
+pacf(tsdf)
+```
+```{r}
+tsr_arima <- arima(tsr,order=c(2,1,11))
+tsr_arima.forecast <- forecast(tsr_arima,h=10)
+plot(tsr_arima.forecast)
+```
+
+
+```{r}
+library(prophet)
+
+```
+
+
+```{r}
+df_new <- df
+df_new <- subset(df_new,select=-c(Low,Open,Volume,High,Adjusted.Close))
+df_new$Date <- as.Date(df_new$Date, format="%d-%m-%Y")
+names(df_new) <- c('ds','y')
+head(df_new)
+```
+
+
+```{r}
+m <- prophet(df_new)
+future <- make_future_dataframe(m,periods = 10)
+```
+
+
+```{r}
+forecast_prophet <- predict(m, future)
+```
+
+
+```{r}
+plot(m, forecast_prophet)
+```
+```{r}
+auto_arima <- auto.arima(tsr)
+checkresiduals(auto_arima)
+```
+
+
+```{r}
+auto_arima.forecast <- forecast(auto_arima)
+autoplot(auto_arima.forecast)
+```
+
+
+```{r}
+tail(future)
+```
+
+
+```{r}
+test_data <- read.csv('AMD_test.csv')
+test_data
+```
+```{r}
+accuracy(auto_arima)
+```
+```{r}
+accuracy(holtt.forecast)
+```
+
+
+```{r}
+accuracy(ETS.forecast)
+```
+
+
+```{r}
+accuracy(tsr_arima.forecast)
+```
+
+
+
